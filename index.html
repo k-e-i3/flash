@@ -179,21 +179,20 @@ let stats = {};
 
 // --- 初期化処理 ---
 async function init() {
-    // 1. 学習ログをlocalStorageから読み込む
     stats = loadStats();
     
-    // 2. index.jsonを読み込んでCSV選択肢を生成
     let fileList = [];
     try {
         const response = await fetch('index.json');
         if (response.ok) {
             fileList = await response.json();
+        } else {
+             // 404エラーなどをコンソールに表示
+             console.error(`index.jsonの読み込みに失敗しました。ステータス: ${response.status}`);
+             throw new Error("index.jsonの読み込みエラー");
         }
     } catch (e) {
-        console.warn("index.jsonの読み込みに失敗しました。フォールバックします。");
-    }
-    
-    if (!Array.isArray(fileList) || fileList.length === 0) {
+        console.warn("index.jsonの読み込みに失敗しました。フォールバックします。", e);
         fileList = csvFilesFallback;
     }
     
@@ -209,6 +208,14 @@ async function init() {
 // --- CSVデータとログの操作 ---
 function parseCsvData(text) {
     const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
+    // デバッグ用：パース結果をコンソールに表示
+    console.log("PapaParse Result:", parsed);
+
+    if (parsed.errors.length > 0) {
+        console.error("CSVの解析エラー:", parsed.errors);
+        alert(`CSVの解析中にエラーが発生しました。${parsed.errors.length}件のエラーがあります。コンソールを確認してください。`);
+    }
+
     return parsed.data
         .map(row => ({
             id: row['問題番号']?.trim(),
@@ -247,7 +254,18 @@ async function startLearningSession() {
         if (!response.ok) throw new Error(`ファイルが見つかりません: ${filename}`);
         
         const text = await response.text();
+        
+        // --- ★診断機能★ ---
+        alert(`【チェック1】CSVファイル読み込み成功！\nファイル名: ${filename}\n\n中身の先頭100文字:\n${text.substring(0, 100)}`);
+        
         allCards = parseCsvData(text);
+        
+        alert(`【チェック2】CSV解析完了！\n有効なカード（ID, 問題, 解答が揃っているもの）は ${allCards.length} 件でした。`);
+        // --- ★診断ここまで★
+
+        if (allCards.length === 0) {
+            throw new Error("CSVファイルは読み込めましたが、有効なカードデータが見つかりませんでした。CSVのヘッダー（問題番号,問題,解答）や中身が正しいか確認してください。");
+        }
 
         filterAndPrepareCards();
         
@@ -264,8 +282,10 @@ async function startLearningSession() {
     } catch (err) {
         notice.textContent = `エラー: ${err.message}`;
         console.error(err);
+        alert(`処理中にエラーが発生しました:\n\n${err.message}`);
     }
 }
+
 
 function filterAndPrepareCards() {
     const mode = modeSelect.value;
@@ -274,12 +294,12 @@ function filterAndPrepareCards() {
     if (mode === 'mistakes') {
         filtered = allCards.filter(c => {
             const s = stats[c.id];
-            if (!s || s.total === 0) return true; // 未学習も含む
+            if (!s || s.total === 0) return true;
             return (s.correct / s.total) * 100 < 80;
         });
     } else if (mode === 'new') {
         filtered = allCards.filter(c => !stats[c.id]);
-    } else { // 'all'
+    } else {
         filtered = [...allCards];
     }
     
@@ -296,11 +316,9 @@ function renderCard() {
     
     const cardData = currentCards[currentIndex];
     
-    // カードを表面に戻す
     card.classList.remove('is-flipped');
     feedbackControls.classList.add('hidden');
 
-    // 内容を更新
     questionText.textContent = cardData.question;
     answerText.textContent = cardData.answer;
     cardId.textContent = `ID: ${cardData.id}`;
@@ -362,17 +380,15 @@ function handleFeedback(isCorrect) {
     }
     
     saveStats();
-    updateStatsBadge(id); // バッジを即時更新
+    updateStatsBadge(id);
     
-    // 少し待ってから次のカードへ
     setTimeout(() => {
         if (currentIndex < currentCards.length -1) {
             currentIndex++;
             renderCard();
         } else {
-            //最後のカードの場合
             currentIndex++;
-            updateProgress(); // プログレスバーを100%にする
+            updateProgress();
             cardArea.classList.add('hidden');
             completionMessage.classList.remove('hidden');
         }
