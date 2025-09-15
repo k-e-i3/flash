@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>技術士試験 暗記用フラッシュカード</title>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  body { font-family: 'Noto Sans JP', sans-serif; }
+  .card-container { perspective: 1000px; }
+  .card {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    transform-style: preserve-3d;
+    transition: transform 0.6s;
+  }
+  .card.is-flipped {
+    transform: rotateY(180deg);
+  }
+  .card-face {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 2rem;
+    border-radius: 0.5rem;
+  }
+  .card-front {
+    background-color: white;
+  }
+  .card-back {
+    background-color: #f7fafc; /* bg-gray-50 */
+    transform: rotateY(180deg);
+  }
+  .stats-badge {
+    transition: background-color 0.3s;
+  }
+</style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+<div class="container mx-auto p-4 sm:p-6 lg:p-8 max-w-4xl">
+  <header class="text-center mb-8">
+    <h1 class="text-3xl font-bold text-gray-800">技術士試験 暗記用フラッシュカード</h1>
+    <p class="text-gray-600 mt-2">CSVファイルを読み込んで、効率的に暗記学習を進めましょう。</p>
+  </header>
+
+  <!-- コントロールパネル -->
+  <section class="bg-white p-4 rounded-lg shadow-md mb-8">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+      <div>
+        <label for="csvSelect" class="block text-sm font-medium text-gray-700">問題セット</label>
+        <select id="csvSelect" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"></select>
+      </div>
+      <div>
+        <label for="modeSelect" class="block text-sm font-medium text-gray-700">出題モード</label>
+        <select id="modeSelect" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+          <option value="all" selected>全問題からランダム</option>
+          <option value="mistakes">苦手な問題だけ (正答率80%未満)</option>
+          <option value="new">未学習の問題だけ</option>
+        </select>
+      </div>
+      <button id="startBtn" class="w-full bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors duration-300 flex items-center justify-center gap-2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" /></svg>
+        学習開始
+      </button>
+    </div>
+    <div id="notice" class="text-sm text-yellow-600 mt-3 text-center font-medium"></div>
+  </section>
+
+  <!-- フラッシュカード表示領域 -->
+  <main id="cardArea" class="hidden">
+    <!-- プログレスバーとコントロール -->
+    <div class="mb-4">
+        <div class="flex justify-between items-center mb-2">
+            <span id="progressText" class="text-sm font-medium text-gray-600"></span>
+            <div class="flex items-center gap-2">
+                <button id="resetBtn" title="セットの最初に戻る" class="p-2 bg-gray-200 rounded-full hover:bg-gray-300">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 9a9 9 0 0114.13-4.13M20 15a9 9 0 01-14.13 4.13" /></svg>
+                </button>
+                <button id="shuffleBtn" title="カードをシャッフル" class="p-2 bg-gray-200 rounded-full hover:bg-gray-300">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6M4 4l5 5-5 5m11-1V4l5 5-5 5" /></svg>
+                </button>
+            </div>
+        </div>
+        <div class="w-full bg-gray-200 rounded-full h-2.5">
+            <div id="progressBar" class="bg-indigo-600 h-2.5 rounded-full transition-all duration-300"></div>
+        </div>
+    </div>
+    
+    <!-- カード本体 -->
+    <div id="cardContainer" class="card-container h-80 sm:h-96">
+        <div id="card" class="card">
+            <div class="card-face card-front shadow-lg">
+                <div class="text-right w-full absolute top-4 right-4 flex items-center justify-end gap-2">
+                     <span id="cardId" class="text-xs text-gray-400"></span>
+                     <div id="statsBadge" class="stats-badge text-xs font-bold px-2.5 py-1 rounded-full text-white whitespace-nowrap"></div>
+                </div>
+                <p id="questionText" class="text-xl sm:text-2xl font-semibold text-center"></p>
+                <div class="absolute bottom-4 text-sm text-gray-400">クリックして答えを見る</div>
+            </div>
+            <div class="card-face card-back shadow-lg border-2 border-gray-200">
+                <p id="answerText" class="text-xl sm:text-2xl font-bold text-center text-indigo-700"></p>
+                 <div class="absolute bottom-4 text-sm text-gray-400">クリックして問題に戻る</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 理解度ボタン -->
+    <div id="feedbackControls" class="mt-6 grid grid-cols-2 gap-4 hidden">
+        <button id="incorrectBtn" class="w-full bg-red-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-red-600 transition-colors duration-300 flex items-center justify-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            できなかった
+        </button>
+        <button id="correctBtn" class="w-full bg-green-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-600 transition-colors duration-300 flex items-center justify-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            できた
+        </button>
+    </div>
+
+    <!-- ナビゲーション -->
+    <div class="mt-6 flex justify-between items-center">
+        <button id="prevBtn" class="px-6 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 font-semibold hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">前へ</button>
+        <button id="nextBtn" class="px-6 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 font-semibold hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">次へ</button>
+    </div>
+  </main>
+
+  <!--完了メッセージ-->
+  <div id="completionMessage" class="hidden text-center bg-white p-8 rounded-lg shadow-md">
+      <h2 class="text-2xl font-bold text-green-600">学習完了！</h2>
+      <p class="mt-4 text-gray-700">このセットの学習はすべて完了しました。素晴らしいです！</p>
+      <button id="restartBtn" class="mt-6 bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-indigo-700 transition-colors duration-300">もう一度挑戦する</button>
+  </div>
+
+</div>
+
+<script>
+// --- 設定 ---
+const STORAGE_KEY_STATS = 'flashcardAppStats_v1';
+const csvFilesFallback = ["rccm_mondai_all.csv"]; // index.jsonがない場合のフォールバック
+
+// --- DOM要素 ---
+const csvSelect = document.getElementById('csvSelect');
+const modeSelect = document.getElementById('modeSelect');
+const startBtn = document.getElementById('startBtn');
+const notice = document.getElementById('notice');
+const cardArea = document.getElementById('cardArea');
+const progressText = document.getElementById('progressText');
+const progressBar = document.getElementById('progressBar');
+const cardContainer = document.getElementById('cardContainer');
+const card = document.getElementById('card');
+const questionText = document.getElementById('questionText');
+const answerText = document.getElementById('answerText');
+const cardId = document.getElementById('cardId');
+const statsBadge = document.getElementById('statsBadge');
+const feedbackControls = document.getElementById('feedbackControls');
+const correctBtn = document.getElementById('correctBtn');
+const incorrectBtn = document.getElementById('incorrectBtn');
+const prevBtn = document.getElementById('prevBtn');
+const nextBtn = document.getElementById('nextBtn');
+const resetBtn = document.getElementById('resetBtn');
+const shuffleBtn = document.getElementById('shuffleBtn');
+const completionMessage = document.getElementById('completionMessage');
+const restartBtn = document.getElementById('restartBtn');
+
+// --- アプリケーションの状態 ---
+let allCards = [];
+let currentCards = [];
+let currentIndex = 0;
+let stats = {};
+
+// --- 初期化処理 ---
+async function init() {
+    // 1. 学習ログをlocalStorageから読み込む
+    stats = loadStats();
+    
+    // 2. index.jsonを読み込んでCSV選択肢を生成
+    let fileList = [];
+    try {
+        const response = await fetch('index.json');
+        if (response.ok) {
+            fileList = await response.json();
+        }
+    } catch (e) {
+        console.warn("index.jsonの読み込みに失敗しました。フォールバックします。");
+    }
+    
+    if (!Array.isArray(fileList) || fileList.length === 0) {
+        fileList = csvFilesFallback;
+    }
+    
+    csvSelect.innerHTML = '';
+    fileList.forEach(file => {
+        const option = document.createElement('option');
+        option.value = file;
+        option.textContent = file;
+        csvSelect.appendChild(option);
+    });
+}
+
+// --- CSVデータとログの操作 ---
+function parseCsvData(text) {
+    const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
+    return parsed.data
+        .map(row => ({
+            id: row['問題番号']?.trim(),
+            question: row['問題']?.trim(),
+            answer: row['解答']?.trim(),
+        }))
+        .filter(c => c.id && c.question && c.answer);
+}
+
+function loadStats() {
+    try {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY_STATS) || '{}');
+    } catch (e) {
+        console.error("学習ログの読み込みに失敗しました:", e);
+        return {};
+    }
+}
+
+function saveStats() {
+    try {
+        localStorage.setItem(STORAGE_KEY_STATS, JSON.stringify(stats));
+    } catch (e) {
+        console.error("学習ログの保存に失敗しました:", e);
+    }
+}
+
+// --- 学習ロジック ---
+async function startLearningSession() {
+    cardArea.classList.add('hidden');
+    completionMessage.classList.add('hidden');
+    notice.textContent = 'CSVファイルを読み込んでいます...';
+
+    try {
+        const filename = csvSelect.value;
+        const response = await fetch(filename);
+        if (!response.ok) throw new Error(`ファイルが見つかりません: ${filename}`);
+        
+        const text = await response.text();
+        allCards = parseCsvData(text);
+
+        filterAndPrepareCards();
+        
+        if (currentCards.length === 0) {
+            notice.textContent = 'このモードで出題できる問題がありません。';
+            return;
+        }
+
+        currentIndex = 0;
+        cardArea.classList.remove('hidden');
+        notice.textContent = '';
+        renderCard();
+
+    } catch (err) {
+        notice.textContent = `エラー: ${err.message}`;
+        console.error(err);
+    }
+}
+
+function filterAndPrepareCards() {
+    const mode = modeSelect.value;
+    let filtered;
+
+    if (mode === 'mistakes') {
+        filtered = allCards.filter(c => {
+            const s = stats[c.id];
+            if (!s || s.total === 0) return true; // 未学習も含む
+            return (s.correct / s.total) * 100 < 80;
+        });
+    } else if (mode === 'new') {
+        filtered = allCards.filter(c => !stats[c.id]);
+    } else { // 'all'
+        filtered = [...allCards];
+    }
+    
+    currentCards = shuffleArray([...filtered]);
+}
+
+// --- UI描画と更新 ---
+function renderCard() {
+    if (currentIndex >= currentCards.length) {
+        cardArea.classList.add('hidden');
+        completionMessage.classList.remove('hidden');
+        return;
+    }
+    
+    const cardData = currentCards[currentIndex];
+    
+    // カードを表面に戻す
+    card.classList.remove('is-flipped');
+    feedbackControls.classList.add('hidden');
+
+    // 内容を更新
+    questionText.textContent = cardData.question;
+    answerText.textContent = cardData.answer;
+    cardId.textContent = `ID: ${cardData.id}`;
+    
+    updateStatsBadge(cardData.id);
+    updateProgress();
+    updateNavButtons();
+}
+
+function updateStatsBadge(id) {
+    const s = stats[id] || { correct: 0, total: 0 };
+    const rate = s.total > 0 ? (s.correct / s.total) * 100 : -1;
+    
+    statsBadge.classList.remove("bg-gray-400", "bg-red-500", "bg-yellow-500", "bg-green-500");
+    
+    if (rate === -1) {
+        statsBadge.textContent = "未学習";
+        statsBadge.classList.add("bg-gray-400");
+    } else {
+        statsBadge.textContent = `${s.correct}/${s.total} (${rate.toFixed(0)}%)`;
+        if (rate < 50) statsBadge.classList.add("bg-red-500");
+        else if (rate < 80) statsBadge.classList.add("bg-yellow-500");
+        else statsBadge.classList.add("bg-green-500");
+    }
+}
+
+function updateProgress() {
+    const progress = currentCards.length > 0 ? ((currentIndex + 1) / currentCards.length) * 100 : 0;
+    progressText.textContent = `${currentIndex + 1} / ${currentCards.length}`;
+    progressBar.style.width = `${progress}%`;
+}
+
+function updateNavButtons() {
+    prevBtn.disabled = currentIndex === 0;
+    nextBtn.disabled = currentIndex >= currentCards.length - 1;
+}
+
+// --- イベントハンドラ ---
+function handleCardFlip() {
+    card.classList.toggle('is-flipped');
+    if (card.classList.contains('is-flipped')) {
+        feedbackControls.classList.remove('hidden');
+    } else {
+        feedbackControls.classList.add('hidden');
+    }
+}
+
+function handleFeedback(isCorrect) {
+    const cardData = currentCards[currentIndex];
+    const id = cardData.id;
+    
+    if (!stats[id]) {
+        stats[id] = { correct: 0, total: 0 };
+    }
+    
+    stats[id].total++;
+    if (isCorrect) {
+        stats[id].correct++;
+    }
+    
+    saveStats();
+    updateStatsBadge(id); // バッジを即時更新
+    
+    // 少し待ってから次のカードへ
+    setTimeout(() => {
+        if (currentIndex < currentCards.length -1) {
+            currentIndex++;
+            renderCard();
+        } else {
+            //最後のカードの場合
+            currentIndex++;
+            updateProgress(); // プログレスバーを100%にする
+            cardArea.classList.add('hidden');
+            completionMessage.classList.remove('hidden');
+        }
+    }, 300);
+}
+
+function goToPrevCard() {
+    if (currentIndex > 0) {
+        currentIndex--;
+        renderCard();
+    }
+}
+
+function goToNextCard() {
+    if (currentIndex < currentCards.length - 1) {
+        currentIndex++;
+        renderCard();
+    }
+}
+
+function resetCurrentSet() {
+    currentIndex = 0;
+    renderCard();
+    completionMessage.classList.add('hidden');
+    cardArea.classList.remove('hidden');
+}
+
+// --- ユーティリティ ---
+function shuffleArray(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+}
+
+// --- イベントリスナー設定 ---
+startBtn.addEventListener('click', startLearningSession);
+cardContainer.addEventListener('click', handleCardFlip);
+correctBtn.addEventListener('click', () => handleFeedback(true));
+incorrectBtn.addEventListener('click', () => handleFeedback(false));
+prevBtn.addEventListener('click', goToPrevCard);
+nextBtn.addEventListener('click', goToNextCard);
+shuffleBtn.addEventListener('click', () => {
+    currentCards = shuffleArray(currentCards);
+    resetCurrentSet();
+});
+resetBtn.addEventListener('click', resetCurrentSet);
+restartBtn.addEventListener('click', startLearningSession);
+
+// --- 起動 ---
+document.addEventListener('DOMContentLoaded', init);
+</script>
+
+</body>
+</html>
