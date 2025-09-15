@@ -50,26 +50,36 @@
 <div class="container mx-auto p-4 sm:p-6 lg:p-8 max-w-4xl">
   <header class="text-center mb-8">
     <h1 class="text-3xl font-bold text-gray-800">技術士試験 暗記用フラッシュカード</h1>
-    <p class="text-gray-600 mt-2">CSVファイルを読み込んで、効率的に暗記学習を進めましょう。</p>
+    <p class="text-gray-600 mt-2">効率的に暗記学習を進めましょう。</p>
   </header>
 
   <!-- コントロールパネル -->
   <section class="bg-white p-4 rounded-lg shadow-md mb-8">
+    <!-- ▼▼▼ 変更点1: 3列レイアウトに変更 ▼▼▼ -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-      <div>
-        <label for="csvSelect" class="block text-sm font-medium text-gray-700">問題セット</label>
-        <select id="csvSelect" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"></select>
-      </div>
       <div>
         <label for="modeSelect" class="block text-sm font-medium text-gray-700">出題モード</label>
         <select id="modeSelect" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
           <option value="all" selected>全問題からランダム</option>
           <option value="mistakes">苦手な問題だけ (正答率80%未満)</option>
+          <!-- ▼▼▼ 変更点2: 新しい復習モードを追加 ▼▼▼ -->
+          <option value="review_frequent_mistakes">繰り返し間違える問題 (解答2回以上)</option>
           <option value="new">未学習の問題だけ</option>
         </select>
       </div>
+      <!-- ▼▼▼ 変更点3: 出題数の選択機能を追加 ▼▼▼ -->
+      <div>
+        <label for="numSelect" class="block text-sm font-medium text-gray-700">出題数</label>
+        <select id="numSelect" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+            <option value="10">10問</option>
+            <option value="20">20問</option>
+            <option value="30">30問</option>
+            <option value="50">50問</option>
+            <option value="all" selected>全て</option>
+        </select>
+      </div>
       <button id="startBtn" class="w-full bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors duration-300 flex items-center justify-center gap-2">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" /></svg>
+        <svg xmlns="http://www.w.org/2000/svg" class="h-5 w-5" viewBox="http://www.w3.org/2000/svg" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" /></svg>
         学習開始
       </button>
     </div>
@@ -143,13 +153,100 @@
 </div>
 
 <script>
-// --- 設定 ---
-const STORAGE_KEY_STATS = 'flashcardAppStats_v1';
-const csvFilesFallback = ["rccm_mondai_all.csv"]; // index.jsonがない場合のフォールバック
+// --- CSVデータを直接ここに埋め込みます ---
+const csvData = `
+"問題番号","問題","解答"
+"土01","業務④の名称は？","市道71781号線道路改良設計等業務委託"
+"土02","業務④の発注者は？","土岐市"
+"土03","業務④の目的：何の開院に伴うものか？","新病院"
+"土04","業務④の目的：何を安定させる必要があったか？","隣接する急傾斜河川の護岸"
+"土05","業務④の目的：何に基づき、流下能力を確保する計画か？","河川砂防技術基準"
+"土06","業務④の履行期間（年月と月数）は？","令和4年8月～令和5年3月（8ヶ月）"
+"土07","業務④の内容：河床の安定と流速の低減のため、何を計画したか？","落差工と帯工の床固工群"
+"土08","業務④の内容：河床に採用した工法は？","石張りコンクリート"
+"土09","業務④の内容：護岸に採用した工法は？","ブロック積み護岸"
+"土10","業務④の内容：ブロック積み護岸を採用した際の考慮事項は？（二つ）","施工性と安全性"
+"土11","業務④の内容：ブロック積み護岸は、何との整合を図ったか？","道路拡幅"
+"土12","業務④のあなたの役割は？","主担当者"
+"土13","業務④の役割：主担当者として調整した事項を3つ挙げよ。","用地制約、排水能力、道路設計の整合性"
+"土14","業務④の役割：誰との協議を主導したか？（二者）","道路管理者、河川管理者"
+"土15","業務④の役割：管理者との協議を主導し、何を図ったか？","円滑な業務遂行"
+"土16","業務④の目的：（　　）の道路拡幅設計に対応。","緊急車両通行路"
+"土17","業務④の目的：隣接する急傾斜河川の護岸を安定させ、（　　）を確保した計画。","流下能力"
+"土18","業務④の内容：急勾配河川の流下能力を確保するため、（　　）と（　　）の床固工群を計画。","落差工、帯工"
+"土19","業務④の内容：護岸は道路との（　　）を考慮してブロック積み護岸とした。","近接施工"
+"土20","業務④の役割：主担当者として、用地制約、排水能力、（　　）の整合性を調整した。","道路設計"
+"小01","業務⑤の名称は？","雨水貯留施設基本設計業務委託"
+"小02","業務⑤の発注者は？","小牧市"
+"小03","業務⑤の目的：対象となった排水区域の面積は？","45.5ha"
+"小04","業務⑤の目的：根拠となった法律名は？","特定都市河川浸水被害対策法"
+"小05","業務⑤の目的：何を整備し、何を改修する方針の基本設計か？","雨水貯留施設、既存排水路"
+"小06","業務⑤の履行期間（年月と月数）は？","令和4年8月～令和5年2月（7ヶ月）"
+"小07","業務⑤の内容：何に対する流出解析を行ったか？","計画降雨"
+"小08","業務⑤の内容：流出解析から何を算出したか？","ピーク流量"
+"小09","業務⑤の内容：許容放流量を超過する流量を、何として算定したか？","必要な貯留容量"
+"小10","業務⑤の内容：貯留容量の算定後、何と一体的に計画したか？","既存排水路の改修"
+"小11","業務⑤の内容：計画立案にあたり、踏まえた事項を3つ挙げよ。","公園の上部利用、施工性、経済性"
+"小12","業務⑤のあなたの役割は？","雨水貯留施設の主担当者"
+"小13","業務⑤の役割：何に基づき、排水路改修との整合を図ったか？","流域治水の理念"
+"小14","業務⑤の役割：関係管理者は何者か？（二者）","河川管理者、公園管理者"
+"小15","業務⑤の役割：関係管理者とは、何について協議・調整を行ったか？","整備方針"
+"小16","業務⑤の目的：（　　）haの浸水対策を目的とする。","45.5"
+"小17","業務⑤の目的：特定都市河川浸水被害対策法に基づき、（　　）を軽減する。","浸水被害"
+"小18","業務⑤の内容：流出解析から（　　）を算出し、（　　）を超過する流量を貯留容量とした。","ピーク流量、許容放流量"
+"小19","業務⑤の役割：主担当者として、（　　）の理念に基づき行動した。","流域治水"
+"小20","業務⑤の役割：河川管理者及び公園管理者と（　　）について協議・調整を行った。","整備方針"
+"静01","業務⑦の名称は？","大岩排水区大岩地区雨水管渠実施設計（基本設計）業務委託"
+"静02","業務⑦の発注者は？","静岡市上下水道局"
+"静03","業務⑦の履行期間（年月）は？","令和5年9月～令和6年1月"
+"静04","業務⑦の目的：何に基づいた計画か？","雨水排水総合計画"
+"静05","業務⑦の目的：対象となった排水区の面積は？","21.8ha"
+"静06","業務⑦の目的：計画にあたり配慮した事項を3つ挙げよ。","施工性、周辺環境、経済性"
+"静07","業務⑦の内容：解決策の主要な手法を3つ挙げよ。","幹線水路の分流、排水区域の細分化、既存ストックの有効活用"
+"静08","業務⑦の役割：あなたの役割は？","主担当者"
+"静09","業務⑦の役割：主担当者として、何を行ったか？","基本設計業務の全般にわたる計画の立案"
+"静10","業務⑦の役割：誰と協議・調整を行ったか？","発注者及び関係者"
+"静11","技術上の問題点：浸水要因は、ネック地点における何が不足していたことか？","流水断面"
+"静12","技術上の問題点：単純に水路を改築し、幹線へ接続した場合の懸念点は何か？","別地点での浸水の誘発"
+"静13","技術上の問題点：対策として、放流先をどうしたか？","二分して負担を分散"
+"静14","技術上の問題点：対策として、既存水路の流路をどうしたか？","制限・再配分（排水区域を細分化）"
+"静15","技術上の問題点：上流側へ放流するにあたり、事前に何を確認したか？","当該区間の流下能力"
+"静16","技術上の問題点：流下能力の確認を踏まえ、何を設けたか？","時刻・流量の制御"
+"静17","技術上の問題点：対策の結果、分流幹線のサイズはどう変化したか？","最大1400×1400から1200×1200へ縮小"
+"静18","技術上の問題点：分流幹線の縮小により、両立できたことは何か？（二つ）","埋設物との干渉低減、土被りの確保"
+"静19","技術上の問題点：分流点に大型桝を設置しなかった理由は？","交通影響が大きいため"
+"静20","技術上の問題点：大型桝の代替として、既存幹線内に何を設置したか？","越流壁"
+"静21","技術上の問題点：越流壁は何を利用した制御方法か？","水位差を利用した越流制御"
+"静22","技術上の問題点：越流壁の設置により、何を回避できたか？","大規模な開削"
+"静23","実施上の問題点：業務が短期工期であったため、誰との工程調整が必要だったか？","測量班"
+"静24","実施上の問題点：測量も伴ったため、誰への周知・安全配慮を徹底したか？","住民"
+"静25","実施上の問題点：手戻りを抑制するために、誰と何を実施したか？","測量班・発注者との現地合同踏査"
+"静26","実施上の問題点：資料が不明確な古い水路について、何を整理したか？","公私道区分や用途・所有者・権利関係"
+"静27","実施上の問題点：古い水路の整理にあたり、参考にした資料・手段を3つ挙げよ。","公図、過去文献、関係者聴取"
+"静28","実施上の問題点：分流水路が生活道路と重なる区間で、何を組み込んで計画したか？","段階施工、占用計画、仮復旧"
+"静29","実施上の問題点：合意形成を進めるにあたり、何との施設連携を図ったか？","河川・下水道・道路・公園"
+"静30","実施上の問題点：上流側の放流先河川について、誰と何を協議したか？","河川管理者と放流条件"
+"静31","評価：浸水被害の解決と同時に、何に配慮したか？","周辺住民の生活環境"
+"静32","評価：計画で重点を置いたことは何か？","既存ストックを有効活用すること"
+"静33","評価：上流側への放流条件を事前確認することで、何を回避したか？","別地点での氾濫誘発"
+"静34","評価：被害軽減と施工実現性の両立に加え、何にも繋がったか？","コスト削減"
+"静35","評価：短期工期に対応するため、どのような姿勢を心掛けたか？","フロントローディングな姿勢"
+"静36","評価：フロントローディングな対応として、早期に行ったことを挙げよ。","（広範な）情報収集、社内チーム及び発注者との協調、関係者協議"
+"静37","評価：フロントローディングな対応により、何を抑制できたか？","手戻り"
+"静38","技術上の問題点：（　　）地点における流水断面の不足が浸水要因であった。","ネック"
+"静39","技術上の問題点：既存幹線内に（　　）を設置し、大規模な開削を回避した。","越流壁"
+"静40","技術上の問題点：結果として、（　　）の適正化と浸水被害を軽減した。","下流負荷"
+"静41","実施上の問題点：短期工期の中で（　　）も伴ったため、測量班との工程調整が必要だった。","測量"
+"静42","実施上の問題点：資料不明確な水路は（　　）・過去文献・関係者聴取により整理した。","公図"
+"静43","評価：計画では（　　）と排水区域の細分化のバランスを取り、既存ストックを有効活用した。","分流幹線"
+"静44","評価：短期工期であったことから、（　　）な姿勢での対応を心掛けた。","フロントローディング"
+"静45","評価：早期の関係者協議などにより相互理解を深め、（　　）を抑制した。","手戻り"
+`;
 
 // --- DOM要素 ---
-const csvSelect = document.getElementById('csvSelect');
 const modeSelect = document.getElementById('modeSelect');
+// ▼▼▼ 変更点4: numSelect を取得 ▼▼▼
+const numSelect = document.getElementById('numSelect');
 const startBtn = document.getElementById('startBtn');
 const notice = document.getElementById('notice');
 const cardArea = document.getElementById('cardArea');
@@ -172,50 +269,29 @@ const completionMessage = document.getElementById('completionMessage');
 const restartBtn = document.getElementById('restartBtn');
 
 // --- アプリケーションの状態 ---
+const STORAGE_KEY_STATS = 'flashcardAppStats_v2_selfContained'; // バージョンアップ
 let allCards = [];
 let currentCards = [];
 let currentIndex = 0;
 let stats = {};
 
 // --- 初期化処理 ---
-async function init() {
+function init() {
     stats = loadStats();
-    
-    let fileList = [];
-    try {
-        const response = await fetch('index.json');
-        if (response.ok) {
-            fileList = await response.json();
-        } else {
-             // 404エラーなどをコンソールに表示
-             console.error(`index.jsonの読み込みに失敗しました。ステータス: ${response.status}`);
-             throw new Error("index.jsonの読み込みエラー");
-        }
-    } catch (e) {
-        console.warn("index.jsonの読み込みに失敗しました。フォールバックします。", e);
-        fileList = csvFilesFallback;
+    allCards = parseCsvData(csvData);
+
+    if (allCards.length === 0) {
+        notice.textContent = '埋め込みデータの解析に失敗しました。';
+        startBtn.disabled = true;
     }
-    
-    csvSelect.innerHTML = '';
-    fileList.forEach(file => {
-        const option = document.createElement('option');
-        option.value = file;
-        option.textContent = file;
-        csvSelect.appendChild(option);
-    });
 }
 
 // --- CSVデータとログの操作 ---
 function parseCsvData(text) {
     const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
-    // デバッグ用：パース結果をコンソールに表示
-    console.log("PapaParse Result:", parsed);
-
     if (parsed.errors.length > 0) {
         console.error("CSVの解析エラー:", parsed.errors);
-        alert(`CSVの解析中にエラーが発生しました。${parsed.errors.length}件のエラーがあります。コンソールを確認してください。`);
     }
-
     return parsed.data
         .map(row => ({
             id: row['問題番号']?.trim(),
@@ -229,7 +305,6 @@ function loadStats() {
     try {
         return JSON.parse(localStorage.getItem(STORAGE_KEY_STATS) || '{}');
     } catch (e) {
-        console.error("学習ログの読み込みに失敗しました:", e);
         return {};
     }
 }
@@ -243,68 +318,57 @@ function saveStats() {
 }
 
 // --- 学習ロジック ---
-async function startLearningSession() {
+function startLearningSession() {
     cardArea.classList.add('hidden');
     completionMessage.classList.add('hidden');
-    notice.textContent = 'CSVファイルを読み込んでいます...';
-
-    try {
-        const filename = csvSelect.value;
-        const response = await fetch(filename);
-        if (!response.ok) throw new Error(`ファイルが見つかりません: ${filename}`);
-        
-        const text = await response.text();
-        
-        // --- ★診断機能★ ---
-        alert(`【チェック1】CSVファイル読み込み成功！\nファイル名: ${filename}\n\n中身の先頭100文字:\n${text.substring(0, 100)}`);
-        
-        allCards = parseCsvData(text);
-        
-        alert(`【チェック2】CSV解析完了！\n有効なカード（ID, 問題, 解答が揃っているもの）は ${allCards.length} 件でした。`);
-        // --- ★診断ここまで★
-
-        if (allCards.length === 0) {
-            throw new Error("CSVファイルは読み込めましたが、有効なカードデータが見つかりませんでした。CSVのヘッダー（問題番号,問題,解答）や中身が正しいか確認してください。");
-        }
-
-        filterAndPrepareCards();
-        
-        if (currentCards.length === 0) {
-            notice.textContent = 'このモードで出題できる問題がありません。';
-            return;
-        }
-
-        currentIndex = 0;
-        cardArea.classList.remove('hidden');
-        notice.textContent = '';
-        renderCard();
-
-    } catch (err) {
-        notice.textContent = `エラー: ${err.message}`;
-        console.error(err);
-        alert(`処理中にエラーが発生しました:\n\n${err.message}`);
+    
+    filterAndPrepareCards();
+    
+    if (currentCards.length === 0) {
+        notice.textContent = 'このモードで出題できる問題がありません。';
+        return;
     }
+
+    currentIndex = 0;
+    cardArea.classList.remove('hidden');
+    notice.textContent = '';
+    renderCard();
 }
 
-
+// ▼▼▼ 変更点5: filterAndPrepareCards() を大幅に更新 ▼▼▼
 function filterAndPrepareCards() {
     const mode = modeSelect.value;
     let filtered;
 
     if (mode === 'mistakes') {
+        // 正答率80%未満（未学習も含む）
         filtered = allCards.filter(c => {
             const s = stats[c.id];
             if (!s || s.total === 0) return true;
             return (s.correct / s.total) * 100 < 80;
         });
-    } else if (mode === 'new') {
+    } else if (mode === 'review_frequent_mistakes') {
+        // 解答2回以上で、正答率80%未満
+        filtered = allCards.filter(c => {
+            const s = stats[c.id];
+            if (!s || s.total < 2) return false; // 2回未満は除外
+            return (s.correct / s.total) * 100 < 80;
+        });
+    }
+    else if (mode === 'new') {
+        // 未学習のみ
         filtered = allCards.filter(c => !stats[c.id]);
     } else {
+        // 全問題
         filtered = [...allCards];
     }
     
-    currentCards = shuffleArray([...filtered]);
+    // シャッフルしてから、指定された数だけ取り出す
+    shuffleArray(filtered);
+    const num = numSelect.value === 'all' ? filtered.length : parseInt(numSelect.value, 10);
+    currentCards = filtered.slice(0, num);
 }
+
 
 // --- UI描画と更新 ---
 function renderCard() {
@@ -445,3 +509,4 @@ document.addEventListener('DOMContentLoaded', init);
 
 </body>
 </html>
+
