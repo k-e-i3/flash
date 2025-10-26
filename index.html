@@ -37,7 +37,7 @@
         background-color: white;
       }
       .card-back {
-        background-color: #f7fafc; /* bg-gray-50 */
+        background-color: #f7fafc;
         transform: rotateY(180deg);
       }
       .stats-badge {
@@ -46,15 +46,19 @@
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
-
 <div class="container mx-auto p-4 sm:p-6 lg:p-8 max-w-4xl">
   <header class="text-center mb-8">
     <h1 class="text-3xl font-bold text-gray-800">技術士試験 暗記用フラッシュカード</h1>
     <p class="text-gray-600 mt-2">効率的に暗記学習を進めましょう。</p>
   </header>
-
   <section class="bg-white p-4 rounded-lg shadow-md mb-8">
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end mb-4">
+      <div>
+        <label for="csvSelect" class="block text-sm font-medium text-gray-700">問題セット</label>
+        <select id="csvSelect" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+          <option value="">読み込み中...</option>
+        </select>
+      </div>
       <div>
         <label for="modeSelect" class="block text-sm font-medium text-gray-700">出題モード</label>
         <select id="modeSelect" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
@@ -64,6 +68,12 @@
           <option value="new">未学習の問題だけ</option>
         </select>
       </div>
+      <button id="startBtn" class="w-full bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors duration-300 flex items-center justify-center gap-2" disabled>
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" /></svg>
+        学習開始
+      </button>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
       <div>
         <label for="numSelect" class="block text-sm font-medium text-gray-700">出題数</label>
         <select id="numSelect" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
@@ -74,14 +84,12 @@
             <option value="all" selected>全て</option>
         </select>
       </div>
-      <button id="startBtn" class="w-full bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors duration-300 flex items-center justify-center gap-2" disabled>
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" /></svg>
-        学習開始
-      </button>
+      <div class="text-sm text-gray-600">
+        <span id="fileInfo"></span>
+      </div>
     </div>
-    <div id="notice" class="text-sm text-yellow-600 mt-3 text-center font-medium">CSVファイルを読み込んでいます...</div>
+    <div id="notice" class="text-sm text-yellow-600 mt-3 text-center font-medium">CSVファイルリストを読み込んでいます...</div>
   </section>
-
   <main id="cardArea" class="hidden">
     <div class="mb-4">
         <div class="flex justify-between items-center mb-2">
@@ -127,23 +135,20 @@
             できた
         </button>
     </div>
-
     <div class="mt-6 flex justify-between items-center">
         <button id="prevBtn" class="px-6 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 font-semibold hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">前へ</button>
         <button id="nextBtn" class="px-6 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 font-semibold hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">次へ</button>
     </div>
   </main>
-
   <div id="completionMessage" class="hidden text-center bg-white p-8 rounded-lg shadow-md">
       <h2 class="text-2xl font-bold text-green-600">学習完了！</h2>
       <p class="mt-4 text-gray-700">このセットの学習はすべて完了しました。素晴らしいです！</p>
       <button id="restartBtn" class="mt-6 bg-indigo-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-indigo-700 transition-colors duration-300">もう一度挑戦する</button>
   </div>
-
 </div>
-
 <script>
 // --- DOM要素 ---
+const csvSelect = document.getElementById('csvSelect');
 const modeSelect = document.getElementById('modeSelect');
 const numSelect = document.getElementById('numSelect');
 const startBtn = document.getElementById('startBtn');
@@ -169,36 +174,43 @@ const restartBtn = document.getElementById('restartBtn');
 
 // --- アプリケーションの状態 ---
 const STORAGE_KEY_STATS = 'flashcardAppStats_v2_selfContained';
+const csvFilesFallback = ["rccm_mondai_all.csv"];
 let allCards = [];
 let currentCards = [];
 let currentIndex = 0;
 let stats = {};
 
 // --- 初期化処理 ---
-// ▼▼▼ 変更点: init関数をasyncに変更し、fetchでCSVを読み込む ▼▼▼
 async function init() {
     stats = loadStats();
     
+    // index.jsonを読み込んでCSVファイルリストを取得
+    let fileList = [];
     try {
-        const response = await fetch('rccm_mondai_all.csv');
-        if (!response.ok) {
-            throw new Error(`ネットワークエラー: ${response.statusText}`);
+        const response = await fetch('index.json');
+        if (response.ok) {
+            fileList = await response.json();
         }
-        const csvText = await response.text();
-        allCards = parseCsvData(csvText);
-
-        if (allCards.length > 0) {
-            notice.textContent = `${allCards.length}件の問題を読み込みました。モードを選択して学習を開始してください。`;
-            startBtn.disabled = false;
-        } else {
-            notice.textContent = 'CSVデータの読み込みに成功しましたが、問題データが空でした。';
-            startBtn.disabled = true;
-        }
-    } catch (error) {
-        console.error('CSVファイルの読み込みに失敗しました:', error);
-        notice.textContent = 'エラー: rccm_mondai_all.csv の読み込みに失敗しました。ファイルがHTMLと同じ場所にありますか？';
-        startBtn.disabled = true;
+    } catch (e) {
+        console.warn("index.jsonの読み込みに失敗しました。フォールバックします。", e);
     }
+    
+    // フォールバック処理
+    if (!Array.isArray(fileList) || fileList.length === 0) {
+        fileList = csvFilesFallback;
+    }
+    
+    // セレクトボックスにファイルリストを追加
+    csvSelect.innerHTML = '';
+    fileList.forEach(file => {
+        const option = document.createElement('option');
+        option.value = file;
+        option.textContent = file;
+        csvSelect.appendChild(option);
+    });
+    
+    notice.textContent = 'ファイルを選択して学習を開始してください。';
+    startBtn.disabled = false;
 }
 
 // --- CSVデータとログの操作 ---
@@ -233,27 +245,46 @@ function saveStats() {
 }
 
 // --- 学習ロジック ---
-function startLearningSession() {
+async function startLearningSession() {
     cardArea.classList.add('hidden');
     completionMessage.classList.add('hidden');
+    notice.textContent = 'CSVファイルを読み込んでいます...';
     
-    filterAndPrepareCards();
-    
-    if (currentCards.length === 0) {
-        notice.textContent = 'このモードで出題できる問題がありません。';
-        return;
+    try {
+        const filename = csvSelect.value;
+        const response = await fetch(filename);
+        if (!response.ok) {
+            throw new Error(`ファイルが見つかりません: ${filename}`);
+        }
+        const csvText = await response.text();
+        allCards = parseCsvData(csvText);
+        
+        if (allCards.length === 0) {
+            notice.textContent = 'CSVデータの読み込みに成功しましたが、問題データが空でした。';
+            return;
+        }
+        
+        filterAndPrepareCards();
+        
+        if (currentCards.length === 0) {
+            notice.textContent = 'このモードで出題できる問題がありません。';
+            return;
+        }
+        
+        currentIndex = 0;
+        cardArea.classList.remove('hidden');
+        notice.textContent = '';
+        renderCard();
+        
+    } catch (error) {
+        console.error('CSVファイルの読み込みに失敗しました:', error);
+        notice.textContent = `エラー: ${error.message}`;
     }
-
-    currentIndex = 0;
-    cardArea.classList.remove('hidden');
-    notice.textContent = '';
-    renderCard();
 }
 
 function filterAndPrepareCards() {
     const mode = modeSelect.value;
     let filtered;
-
     if (mode === 'mistakes') {
         filtered = allCards.filter(c => {
             const s = stats[c.id];
@@ -290,7 +321,6 @@ function renderCard() {
     
     card.classList.remove('is-flipped');
     feedbackControls.classList.add('hidden');
-
     questionText.textContent = cardData.question;
     answerText.textContent = cardData.answer;
     cardId.textContent = `ID: ${cardData.id}`;
@@ -414,6 +444,5 @@ restartBtn.addEventListener('click', startLearningSession);
 // --- 起動 ---
 document.addEventListener('DOMContentLoaded', init);
 </script>
-
 </body>
 </html>
